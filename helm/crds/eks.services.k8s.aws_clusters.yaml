@@ -241,8 +241,14 @@ spec:
                     type: object
                   ipFamily:
                     type: string
+                    x-kubernetes-validations:
+                    - message: Value is immutable once set
+                      rule: self == oldSelf
                   serviceIPv4CIDR:
                     type: string
+                    x-kubernetes-validations:
+                    - message: Value is immutable once set
+                      rule: self == oldSelf
                 type: object
               logging:
                 description: |-

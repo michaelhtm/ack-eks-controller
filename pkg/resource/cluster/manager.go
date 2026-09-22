@@ -50,7 +50,7 @@ var (
 // +kubebuilder:rbac:groups=eks.services.k8s.aws,resources=clusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=eks.services.k8s.aws,resources=clusters/status,verbs=get;update;patch
 
-var lateInitializeFieldNames = []string{"Tier", "DeletionProtection", "KubeAPIServerConfig", "KubeApiServerConfig.EventTTL", "KubeApiServerConfig.ServiceNodePortRange", "KubeApiServerConfig.ServiceNodePortRange.MaxPort", "KubeApiServerConfig.ServiceNodePortRange.MinPort", "KubeControllerManagerConfig", "HorizontalPodAutoscalerControllerConfig", "HorizontalPodAutoscalerSyncPeriod", "PodGCControllerConfig", "TerminatedPodGCThreshold", "KubeSchedulerConfig", "NodeResourcesFit", "ScoringStrategy", "Resources", "Type", "ResourcesVpcConfig.ControlPlaneEgressMode"}
+var lateInitializeFieldNames = []string{"ComputeConfig", "Enabled", "NodePools", "NodeRoleARN", "Tier", "DeletionProtection", "KubeAPIServerConfig", "KubeApiServerConfig.EventTTL", "KubeApiServerConfig.ServiceNodePortRange", "KubeApiServerConfig.ServiceNodePortRange.MaxPort", "KubeApiServerConfig.ServiceNodePortRange.MinPort", "KubeControllerManagerConfig", "HorizontalPodAutoscalerControllerConfig", "HorizontalPodAutoscalerSyncPeriod", "PodGCControllerConfig", "TerminatedPodGCThreshold", "KubeSchedulerConfig", "NodeResourcesFit", "ScoringStrategy", "Resources", "Type", "KubernetesNetworkConfig", "ElasticLoadBalancing", "Enabled", "IPFamily", "ServiceIPv4CIDR", "ResourcesVpcConfig.ControlPlaneEgressMode", "StorageConfig", "BlockStorage", "Enabled"}
 
 // resourceManager is responsible for providing a consistent way to perform
 // CRUD operations in a backend AWS service API for Book custom resources.
@@ -276,6 +276,24 @@ func (rm *resourceManager) lateInitializeFromReadOneOutput(
 ) acktypes.AWSResource {
 	observedKo := rm.concreteResource(observed).ko.DeepCopy()
 	latestKo := rm.concreteResource(latest).ko.DeepCopy()
+	if observedKo.Spec.ComputeConfig != nil && latestKo.Spec.ComputeConfig == nil {
+		latestKo.Spec.ComputeConfig = observedKo.Spec.ComputeConfig
+	}
+	if observedKo.Spec.ComputeConfig != nil && latestKo.Spec.ComputeConfig != nil {
+		if observedKo.Spec.ComputeConfig.Enabled != nil && latestKo.Spec.ComputeConfig.Enabled == nil {
+			latestKo.Spec.ComputeConfig.Enabled = observedKo.Spec.ComputeConfig.Enabled
+		}
+	}
+	if observedKo.Spec.ComputeConfig != nil && latestKo.Spec.ComputeConfig != nil {
+		if observedKo.Spec.ComputeConfig.NodePools != nil && latestKo.Spec.ComputeConfig.NodePools == nil {
+			latestKo.Spec.ComputeConfig.NodePools = observedKo.Spec.ComputeConfig.NodePools
+		}
+	}
+	if observedKo.Spec.ComputeConfig != nil && latestKo.Spec.ComputeConfig != nil {
+		if observedKo.Spec.ComputeConfig.NodeRoleARN != nil && latestKo.Spec.ComputeConfig.NodeRoleARN == nil {
+			latestKo.Spec.ComputeConfig.NodeRoleARN = observedKo.Spec.ComputeConfig.NodeRoleARN
+		}
+	}
 	if observedKo.Spec.ControlPlaneScalingConfig != nil && latestKo.Spec.ControlPlaneScalingConfig != nil {
 		if observedKo.Spec.ControlPlaneScalingConfig.Tier != nil && latestKo.Spec.ControlPlaneScalingConfig.Tier == nil {
 			latestKo.Spec.ControlPlaneScalingConfig.Tier = observedKo.Spec.ControlPlaneScalingConfig.Tier
@@ -371,9 +389,49 @@ func (rm *resourceManager) lateInitializeFromReadOneOutput(
 			}
 		}
 	}
+	if observedKo.Spec.KubernetesNetworkConfig != nil && latestKo.Spec.KubernetesNetworkConfig == nil {
+		latestKo.Spec.KubernetesNetworkConfig = observedKo.Spec.KubernetesNetworkConfig
+	}
+	if observedKo.Spec.KubernetesNetworkConfig != nil && latestKo.Spec.KubernetesNetworkConfig != nil {
+		if observedKo.Spec.KubernetesNetworkConfig.ElasticLoadBalancing != nil && latestKo.Spec.KubernetesNetworkConfig.ElasticLoadBalancing == nil {
+			latestKo.Spec.KubernetesNetworkConfig.ElasticLoadBalancing = observedKo.Spec.KubernetesNetworkConfig.ElasticLoadBalancing
+		}
+	}
+	if observedKo.Spec.KubernetesNetworkConfig != nil && latestKo.Spec.KubernetesNetworkConfig != nil {
+		if observedKo.Spec.KubernetesNetworkConfig.ElasticLoadBalancing != nil && latestKo.Spec.KubernetesNetworkConfig.ElasticLoadBalancing != nil {
+			if observedKo.Spec.KubernetesNetworkConfig.ElasticLoadBalancing.Enabled != nil && latestKo.Spec.KubernetesNetworkConfig.ElasticLoadBalancing.Enabled == nil {
+				latestKo.Spec.KubernetesNetworkConfig.ElasticLoadBalancing.Enabled = observedKo.Spec.KubernetesNetworkConfig.ElasticLoadBalancing.Enabled
+			}
+		}
+	}
+	if observedKo.Spec.KubernetesNetworkConfig != nil && latestKo.Spec.KubernetesNetworkConfig != nil {
+		if observedKo.Spec.KubernetesNetworkConfig.IPFamily != nil && latestKo.Spec.KubernetesNetworkConfig.IPFamily == nil {
+			latestKo.Spec.KubernetesNetworkConfig.IPFamily = observedKo.Spec.KubernetesNetworkConfig.IPFamily
+		}
+	}
+	if observedKo.Spec.KubernetesNetworkConfig != nil && latestKo.Spec.KubernetesNetworkConfig != nil {
+		if observedKo.Spec.KubernetesNetworkConfig.ServiceIPv4CIDR != nil && latestKo.Spec.KubernetesNetworkConfig.ServiceIPv4CIDR == nil {
+			latestKo.Spec.KubernetesNetworkConfig.ServiceIPv4CIDR = observedKo.Spec.KubernetesNetworkConfig.ServiceIPv4CIDR
+		}
+	}
 	if observedKo.Spec.ResourcesVPCConfig != nil && latestKo.Spec.ResourcesVPCConfig != nil {
 		if observedKo.Spec.ResourcesVPCConfig.ControlPlaneEgressMode != nil && latestKo.Spec.ResourcesVPCConfig.ControlPlaneEgressMode == nil {
 			latestKo.Spec.ResourcesVPCConfig.ControlPlaneEgressMode = observedKo.Spec.ResourcesVPCConfig.ControlPlaneEgressMode
+		}
+	}
+	if observedKo.Spec.StorageConfig != nil && latestKo.Spec.StorageConfig == nil {
+		latestKo.Spec.StorageConfig = observedKo.Spec.StorageConfig
+	}
+	if observedKo.Spec.StorageConfig != nil && latestKo.Spec.StorageConfig != nil {
+		if observedKo.Spec.StorageConfig.BlockStorage != nil && latestKo.Spec.StorageConfig.BlockStorage == nil {
+			latestKo.Spec.StorageConfig.BlockStorage = observedKo.Spec.StorageConfig.BlockStorage
+		}
+	}
+	if observedKo.Spec.StorageConfig != nil && latestKo.Spec.StorageConfig != nil {
+		if observedKo.Spec.StorageConfig.BlockStorage != nil && latestKo.Spec.StorageConfig.BlockStorage != nil {
+			if observedKo.Spec.StorageConfig.BlockStorage.Enabled != nil && latestKo.Spec.StorageConfig.BlockStorage.Enabled == nil {
+				latestKo.Spec.StorageConfig.BlockStorage.Enabled = observedKo.Spec.StorageConfig.BlockStorage.Enabled
+			}
 		}
 	}
 	return &resource{latestKo}

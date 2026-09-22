@@ -828,6 +828,25 @@ class TestCluster:
         time.sleep(CHECK_STATUS_WAIT_SECONDS)
         get_and_assert_status(ref, 'ACTIVE', True)
 
+    def test_cluster_auto_mode_defaults_late_initialize(self, eks_client, simple_cluster):
+        (ref, cr) = simple_cluster
+
+        cluster_name = cr["spec"]["name"]
+        wait_for_cluster_active(eks_client, cluster_name)
+
+        assert k8s.wait_on_condition(ref, "ACK.ResourceSynced", "True", wait_periods=30)
+        get_and_assert_status(ref, 'ACTIVE', True)
+
+        cr = k8s.get_resource(ref)
+        knc = cr["spec"]["kubernetesNetworkConfig"]
+        assert knc["elasticLoadBalancing"]["enabled"] is False
+        assert knc.get("ipFamily") is not None
+        assert knc.get("serviceIPv4CIDR") is not None
+
+        time.sleep(CHECK_STATUS_WAIT_SECONDS)
+        get_and_assert_status(ref, 'ACTIVE', True)
+        assert k8s.wait_on_condition(ref, "ACK.ResourceSynced", "True", wait_periods=3)
+
     def test_cluster_component_config_partial_late_initialize(self, eks_client, partial_component_config_cluster):
         # This cluster sets ONLY kubeAPIServerConfig.eventTTL. The EKS backend
         # fills tier defaults for every omitted field and returns the complete

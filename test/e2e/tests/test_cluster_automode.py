@@ -150,6 +150,34 @@ class TestAutoModeCluster:
         wait_for_cluster_active(eks_client, cluster_name)
         time.sleep(CHECK_STATUS_WAIT_SECONDS)
 
+    def test_disable_auto_mode_converges(self, eks_client, auto_mode_cluster):
+        (ref, cr) = auto_mode_cluster
+        cluster_name = cr["spec"]["name"]
+
+        wait_for_cluster_active(eks_client, cluster_name)
+        assert k8s.wait_on_condition(ref, "ACK.ResourceSynced", "True", wait_periods=30)
+
+        k8s.patch_custom_resource(ref, {
+            "spec": {
+                "computeConfig": {"enabled": False},
+                "storageConfig": {"blockStorage": {"enabled": False}},
+                "kubernetesNetworkConfig": {"elasticLoadBalancing": {"enabled": False}},
+            }
+        })
+
+        wait_for_cluster_active(eks_client, cluster_name)
+        time.sleep(CHECK_STATUS_WAIT_SECONDS)
+
+        aws_res = eks_client.describe_cluster(name=cluster_name)
+        logging.info(f"post-disable describe_cluster: {aws_res['cluster'].get('computeConfig')}")
+        assert aws_res["cluster"].get("computeConfig", {}).get("enabled") is not True
+
+        assert k8s.wait_on_condition(ref, "ACK.ResourceSynced", "True", wait_periods=30)
+        get_and_assert_status(ref, 'ACTIVE', True)
+
+        time.sleep(CHECK_STATUS_WAIT_SECONDS)
+        get_and_assert_status(ref, 'ACTIVE', True)
+
     def test_finalizer_retained_during_deletion(self, auto_mode_cluster):
         """Validates that the controller retains the finalizer while the
         cluster CR is in DELETING state and only removes it once the

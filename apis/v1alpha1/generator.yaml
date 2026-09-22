@@ -257,6 +257,46 @@ resources:
       KubeControllerManagerConfig.PodGCControllerConfig.TerminatedPodGCThreshold:
         late_initialize:
           skip_incomplete_check: {}
+      # DescribeCluster reports the Auto Mode defaults even on clusters that never opted in, so absent-vs-false would otherwise read as drift.
+      ComputeConfig:
+        late_initialize:
+          skip_incomplete_check: {}
+      ComputeConfig.Enabled:
+        late_initialize:
+          skip_incomplete_check: {}
+      ComputeConfig.NodePools:
+        late_initialize:
+          skip_incomplete_check: {}
+      ComputeConfig.NodeRoleARN:
+        late_initialize:
+          skip_incomplete_check: {}
+      StorageConfig:
+        late_initialize:
+          skip_incomplete_check: {}
+      StorageConfig.BlockStorage:
+        late_initialize:
+          skip_incomplete_check: {}
+      StorageConfig.BlockStorage.Enabled:
+        late_initialize:
+          skip_incomplete_check: {}
+      KubernetesNetworkConfig:
+        late_initialize:
+          skip_incomplete_check: {}
+      KubernetesNetworkConfig.ElasticLoadBalancing:
+        late_initialize:
+          skip_incomplete_check: {}
+      KubernetesNetworkConfig.ElasticLoadBalancing.Enabled:
+        late_initialize:
+          skip_incomplete_check: {}
+      # AWS offers no update path for either of these, so reject the change at admission.
+      KubernetesNetworkConfig.IPFamily:
+        is_immutable: true
+        late_initialize:
+          skip_incomplete_check: {}
+      KubernetesNetworkConfig.ServiceIPv4CIDR:
+        is_immutable: true
+        late_initialize:
+          skip_incomplete_check: {}
     exceptions:
       errors:
         404:
