@@ -194,6 +194,30 @@ func customPreCompare(
 	if a.ko.Spec.ControlPlaneScalingConfig == nil && b.ko.Spec.ControlPlaneScalingConfig != nil {
 		a.ko.Spec.ControlPlaneScalingConfig = b.ko.Spec.ControlPlaneScalingConfig.DeepCopy()
 	}
+	if a.ko.Spec.ComputeConfig == nil && b.ko.Spec.ComputeConfig != nil {
+		a.ko.Spec.ComputeConfig = b.ko.Spec.ComputeConfig.DeepCopy()
+	}
+	if a.ko.Spec.StorageConfig == nil && b.ko.Spec.StorageConfig != nil {
+		a.ko.Spec.StorageConfig = b.ko.Spec.StorageConfig.DeepCopy()
+	}
+	if a.ko.Spec.KubernetesNetworkConfig == nil && b.ko.Spec.KubernetesNetworkConfig != nil {
+		a.ko.Spec.KubernetesNetworkConfig = b.ko.Spec.KubernetesNetworkConfig.DeepCopy()
+	}
+	if a.ko.Spec.KubernetesNetworkConfig != nil && b.ko.Spec.KubernetesNetworkConfig != nil &&
+		a.ko.Spec.KubernetesNetworkConfig.ElasticLoadBalancing == nil {
+		a.ko.Spec.KubernetesNetworkConfig.ElasticLoadBalancing =
+			b.ko.Spec.KubernetesNetworkConfig.ElasticLoadBalancing.DeepCopy()
+	}
+}
+
+// autoModeTerminalError marks an EKS rejection of the Auto Mode request terminal. It is scoped to that one
+// call because EKS also returns these codes for transient IAM, subnet and KMS propagation elsewhere.
+func autoModeTerminalError(err error) error {
+	awsErr, ok := extractAWSError(err)
+	if ok && (awsErr.Code == "InvalidParameterException" || awsErr.Code == "InvalidRequestException") {
+		return ackerr.NewTerminalError(err)
+	}
+	return err
 }
 
 func (rm *resourceManager) customUpdate(
@@ -396,22 +420,19 @@ func (rm *resourceManager) customUpdate(
 		return returnClusterUpdating(updatedRes)
 	}
 
-	// Handle computeConfig updates
-	if delta.DifferentAt("Spec.ComputeConfig") || delta.DifferentAt("Spec.StorageConfig") || delta.DifferentAt("Spec.KubernetesNetworkConfig") {
-		if err := rm.updateComputeConfig(ctx, desired); err != nil {
+	// Handle EKS Auto Mode updates
+	if delta.DifferentAt("Spec.ComputeConfig") ||
+		delta.DifferentAt("Spec.StorageConfig") ||
+		delta.DifferentAt("Spec.KubernetesNetworkConfig.ElasticLoadBalancing") {
+		if err := rm.updateAutoMode(ctx, desired); err != nil {
 			awsErr, ok := extractAWSError(err)
-			rlog.Info("attempting to update AutoMode config",
-				"error", err,
-				"isAWSError", ok,
-				"awsErrorCode", awsErr.Code)
 
 			// Check to see if we've raced an async update call and need to requeue
 			if ok && awsErr.Code == "ResourceInUseException" {
-				rlog.Info("resource in use, requeueing after async update")
 				return nil, requeueAfterAsyncUpdate()
 			}
 
-			return nil, fmt.Errorf("failed to update AutoMode config: %w", err)
+			return nil, autoModeTerminalError(fmt.Errorf("failed to update AutoMode config: %w", err))
 		}
 
 		return returnClusterUpdating(updatedRes)
@@ -724,72 +745,64 @@ func (rm *resourceManager) associateEncryptionConfig(
 	return nil
 }
 
-// updateComputeConfig updates the compute config of the cluster.
-func (rm *resourceManager) updateComputeConfig(
+// updateAutoMode updates the EKS Auto Mode configuration of the cluster.
+func (rm *resourceManager) updateAutoMode(
 	ctx context.Context,
-	r *resource,
+	desired *resource,
 ) (err error) {
 	rlog := ackrtlog.FromContext(ctx)
-	exit := rlog.Trace("rm.updateComputeConfig")
+	exit := rlog.Trace("rm.updateAutoMode")
 	defer exit(err)
 
-	input := &svcsdk.UpdateClusterConfigInput{
-		Name: r.ko.Spec.Name,
-	}
-
-	if r.ko.Spec.ComputeConfig != nil {
-		// Convert []*string to []string for NodePools
-		nodePools := make([]string, 0, len(r.ko.Spec.ComputeConfig.NodePools))
-		for _, nodePool := range r.ko.Spec.ComputeConfig.NodePools {
-			if nodePool != nil {
-				nodePools = append(nodePools, *nodePool)
-			}
-		}
-
-		input.ComputeConfig = &svcsdktypes.ComputeConfigRequest{
-			Enabled:     r.ko.Spec.ComputeConfig.Enabled,
-			NodePools:   nodePools, // Use the converted []string slice
-			NodeRoleArn: r.ko.Spec.ComputeConfig.NodeRoleARN,
-		}
-	}
-
-	// Only set StorageConfig if it's not nil
-	if r.ko.Spec.StorageConfig != nil && r.ko.Spec.StorageConfig.BlockStorage != nil {
-		input.StorageConfig = &svcsdktypes.StorageConfigRequest{
-			BlockStorage: &svcsdktypes.BlockStorage{
-				Enabled: r.ko.Spec.StorageConfig.BlockStorage.Enabled,
-			},
-		}
-	}
-
-	// Only set KubernetesNetworkConfig if it's not nil
-	if r.ko.Spec.KubernetesNetworkConfig != nil {
-		kubernetesNetworkConfig := &svcsdktypes.KubernetesNetworkConfigRequest{}
-
-		if r.ko.Spec.KubernetesNetworkConfig.ElasticLoadBalancing != nil {
-			kubernetesNetworkConfig.ElasticLoadBalancing = &svcsdktypes.ElasticLoadBalancing{
-				Enabled: r.ko.Spec.KubernetesNetworkConfig.ElasticLoadBalancing.Enabled,
-			}
-		}
-
-		if r.ko.Spec.KubernetesNetworkConfig.IPFamily != nil {
-			kubernetesNetworkConfig.IpFamily = svcsdktypes.IpFamily(*r.ko.Spec.KubernetesNetworkConfig.IPFamily)
-		}
-
-		if r.ko.Spec.KubernetesNetworkConfig.ServiceIPv4CIDR != nil {
-			kubernetesNetworkConfig.ServiceIpv4Cidr = r.ko.Spec.KubernetesNetworkConfig.ServiceIPv4CIDR
-		}
-
-		input.KubernetesNetworkConfig = kubernetesNetworkConfig
-	}
-
-	_, err = rm.sdkapi.UpdateClusterConfig(ctx, input)
+	_, err = rm.sdkapi.UpdateClusterConfig(ctx, newAutoModeUpdateInput(desired))
 	rm.metrics.RecordAPICall("UPDATE", "UpdateClusterConfig", err)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func autoModeTuple(r *resource) (compute *bool, storage *bool, loadBalancing *bool) {
+	if r.ko.Spec.ComputeConfig != nil {
+		compute = r.ko.Spec.ComputeConfig.Enabled
+	}
+	if r.ko.Spec.StorageConfig != nil && r.ko.Spec.StorageConfig.BlockStorage != nil {
+		storage = r.ko.Spec.StorageConfig.BlockStorage.Enabled
+	}
+	if r.ko.Spec.KubernetesNetworkConfig != nil && r.ko.Spec.KubernetesNetworkConfig.ElasticLoadBalancing != nil {
+		loadBalancing = r.ko.Spec.KubernetesNetworkConfig.ElasticLoadBalancing.Enabled
+	}
+	return compute, storage, loadBalancing
+}
+
+// newAutoModeUpdateInput sends all three toggles because EKS only recognises the call when all are present.
+func newAutoModeUpdateInput(
+	desired *resource,
+) *svcsdk.UpdateClusterConfigInput {
+	compute, storage, loadBalancing := autoModeTuple(desired)
+
+	computeConfig := &svcsdktypes.ComputeConfigRequest{Enabled: compute}
+	if cc := desired.ko.Spec.ComputeConfig; cc != nil {
+		computeConfig.NodeRoleArn = cc.NodeRoleARN
+		// Omitted when empty, matching Terraform, eksctl and the documented AWS CLI disable call.
+		for _, nodePool := range cc.NodePools {
+			if nodePool != nil {
+				computeConfig.NodePools = append(computeConfig.NodePools, *nodePool)
+			}
+		}
+	}
+
+	return &svcsdk.UpdateClusterConfigInput{
+		Name:          desired.ko.Spec.Name,
+		ComputeConfig: computeConfig,
+		StorageConfig: &svcsdktypes.StorageConfigRequest{
+			BlockStorage: &svcsdktypes.BlockStorage{Enabled: storage},
+		},
+		KubernetesNetworkConfig: &svcsdktypes.KubernetesNetworkConfigRequest{
+			ElasticLoadBalancing: &svcsdktypes.ElasticLoadBalancing{Enabled: loadBalancing},
+		},
+	}
 }
 
 func (rm *resourceManager) updateZonalShiftConfig(

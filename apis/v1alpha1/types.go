@@ -929,8 +929,10 @@ type KubernetesNetworkConfigRequest struct {
 	// For more information, see EKS Auto Mode load balancing capability in the
 	// Amazon EKS User Guide.
 	ElasticLoadBalancing *ElasticLoadBalancing `json:"elasticLoadBalancing,omitempty"`
-	IPFamily             *string               `json:"ipFamily,omitempty"`
-	ServiceIPv4CIDR      *string               `json:"serviceIPv4CIDR,omitempty"`
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="Value is immutable once set"
+	IPFamily *string `json:"ipFamily,omitempty"`
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="Value is immutable once set"
+	ServiceIPv4CIDR *string `json:"serviceIPv4CIDR,omitempty"`
 }
 
 // The Kubernetes network configuration for the cluster. The response contains

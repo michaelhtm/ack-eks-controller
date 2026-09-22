@@ -828,6 +828,58 @@ class TestCluster:
         time.sleep(CHECK_STATUS_WAIT_SECONDS)
         get_and_assert_status(ref, 'ACTIVE', True)
 
+    def test_cluster_auto_mode_defaults_late_initialize(self, eks_client, simple_cluster):
+        (ref, cr) = simple_cluster
+
+        cluster_name = cr["spec"]["name"]
+        wait_for_cluster_active(eks_client, cluster_name)
+
+        assert k8s.wait_on_condition(ref, "ACK.ResourceSynced", "True", wait_periods=30)
+        get_and_assert_status(ref, 'ACTIVE', True)
+
+        cr = k8s.get_resource(ref)
+        knc = cr["spec"]["kubernetesNetworkConfig"]
+        assert knc["elasticLoadBalancing"]["enabled"] is False
+        assert knc.get("ipFamily") is not None
+        assert knc.get("serviceIPv4CIDR") is not None
+
+        aws_res = eks_client.describe_cluster(name=cluster_name)
+        logging.info(f"non auto mode describe_cluster: computeConfig="
+                     f"{aws_res['cluster'].get('computeConfig')} storageConfig="
+                     f"{aws_res['cluster'].get('storageConfig')}")
+        assert aws_res["cluster"].get("computeConfig", {}).get("enabled") is not True
+        assert aws_res["cluster"].get("storageConfig", {}).get("blockStorage", {}).get("enabled") is not True
+
+        time.sleep(CHECK_STATUS_WAIT_SECONDS)
+        get_and_assert_status(ref, 'ACTIVE', True)
+        assert k8s.wait_on_condition(ref, "ACK.ResourceSynced", "True", wait_periods=3)
+
+    def test_cluster_auto_mode_disabled_explicitly_no_update(self, eks_client, simple_cluster):
+        (ref, cr) = simple_cluster
+
+        cluster_name = cr["spec"]["name"]
+        wait_for_cluster_active(eks_client, cluster_name)
+        assert k8s.wait_on_condition(ref, "ACK.ResourceSynced", "True", wait_periods=30)
+
+        k8s.patch_custom_resource(ref, {
+            "spec": {
+                "computeConfig": {"enabled": False},
+                "storageConfig": {"blockStorage": {"enabled": False}},
+                "kubernetesNetworkConfig": {"elasticLoadBalancing": {"enabled": False}},
+            }
+        })
+
+        assert k8s.wait_on_condition(ref, "ACK.ResourceSynced", "True", wait_periods=30)
+        get_and_assert_status(ref, 'ACTIVE', True)
+
+        time.sleep(CHECK_STATUS_WAIT_SECONDS)
+        get_and_assert_status(ref, 'ACTIVE', True)
+
+        cr = k8s.get_resource(ref)
+        terminal = [c for c in cr["status"].get("conditions", [])
+                    if c["type"] == "ACK.Terminal" and c["status"] == "True"]
+        assert terminal == [], f"unexpected terminal condition: {terminal}"
+
     def test_cluster_component_config_partial_late_initialize(self, eks_client, partial_component_config_cluster):
         # This cluster sets ONLY kubeAPIServerConfig.eventTTL. The EKS backend
         # fills tier defaults for every omitted field and returns the complete
