@@ -50,7 +50,7 @@ var (
 // +kubebuilder:rbac:groups=eks.services.k8s.aws,resources=clusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=eks.services.k8s.aws,resources=clusters/status,verbs=get;update;patch
 
-var lateInitializeFieldNames = []string{"Tier", "DeletionProtection", "KubeAPIServerConfig", "KubeApiServerConfig.EventTTL", "KubeApiServerConfig.ServiceNodePortRange", "KubeApiServerConfig.ServiceNodePortRange.MaxPort", "KubeApiServerConfig.ServiceNodePortRange.MinPort", "KubeControllerManagerConfig", "HorizontalPodAutoscalerControllerConfig", "HorizontalPodAutoscalerSyncPeriod", "PodGCControllerConfig", "TerminatedPodGCThreshold", "KubeSchedulerConfig", "NodeResourcesFit", "ScoringStrategy", "Resources", "Type", "ResourcesVpcConfig.ControlPlaneEgressMode"}
+var lateInitializeFieldNames = []string{"Tier", "DeletionProtection", "KubeAPIServerConfig", "KubeApiServerConfig.EventTTL", "KubeApiServerConfig.ServiceNodePortRange", "KubeApiServerConfig.ServiceNodePortRange.MaxPort", "KubeApiServerConfig.ServiceNodePortRange.MinPort", "KubeControllerManagerConfig", "HorizontalPodAutoscalerControllerConfig", "HorizontalPodAutoscalerSyncPeriod", "PodGCControllerConfig", "TerminatedPodGCThreshold", "KubeSchedulerConfig", "NodeResourcesFit", "ScoringStrategy", "Resources", "Type", "IPFamily", "ServiceIPv4CIDR", "ResourcesVpcConfig.ControlPlaneEgressMode"}
 
 // resourceManager is responsible for providing a consistent way to perform
 // CRUD operations in a backend AWS service API for Book custom resources.
@@ -369,6 +369,16 @@ func (rm *resourceManager) lateInitializeFromReadOneOutput(
 					latestKo.Spec.KubeSchedulerConfig.NodeResourcesFit.ScoringStrategy.Type = observedKo.Spec.KubeSchedulerConfig.NodeResourcesFit.ScoringStrategy.Type
 				}
 			}
+		}
+	}
+	if observedKo.Spec.KubernetesNetworkConfig != nil && latestKo.Spec.KubernetesNetworkConfig != nil {
+		if observedKo.Spec.KubernetesNetworkConfig.IPFamily != nil && latestKo.Spec.KubernetesNetworkConfig.IPFamily == nil {
+			latestKo.Spec.KubernetesNetworkConfig.IPFamily = observedKo.Spec.KubernetesNetworkConfig.IPFamily
+		}
+	}
+	if observedKo.Spec.KubernetesNetworkConfig != nil && latestKo.Spec.KubernetesNetworkConfig != nil {
+		if observedKo.Spec.KubernetesNetworkConfig.ServiceIPv4CIDR != nil && latestKo.Spec.KubernetesNetworkConfig.ServiceIPv4CIDR == nil {
+			latestKo.Spec.KubernetesNetworkConfig.ServiceIPv4CIDR = observedKo.Spec.KubernetesNetworkConfig.ServiceIPv4CIDR
 		}
 	}
 	if observedKo.Spec.ResourcesVPCConfig != nil && latestKo.Spec.ResourcesVPCConfig != nil {

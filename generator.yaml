@@ -257,6 +257,14 @@ resources:
       KubeControllerManagerConfig.PodGCControllerConfig.TerminatedPodGCThreshold:
         late_initialize:
           skip_incomplete_check: {}
+      # EKS only accepts these at creation. Not marked immutable: the update is sent so EKS
+      # is the one that reports the rejection.
+      KubernetesNetworkConfig.IPFamily:
+        late_initialize:
+          skip_incomplete_check: {}
+      KubernetesNetworkConfig.ServiceIPv4CIDR:
+        late_initialize:
+          skip_incomplete_check: {}
     exceptions:
       errors:
         404:
